@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AstroBench Chatbot Arena</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #dee2e6;
+      --text-color: #111;
+      --banner-gradient: linear-gradient(90deg, #142e55, #1a222e); /* new */
+      --input-bg: #ffffff;
+      --input-border: #ccc;
+      --button-bg: #ffffff;
+      --button-text: #00662C;
+      --button-border: #00662C;
+      --button-hover-bg: #e6f3eb;
+      --messages-bg: #f1f5f9;
+      --messages-border: #ccc;
+      --chatbox-bg: linear-gradient(135deg, #2C2C54, #1C1C3A); /* new */
+      --button-bg: #E5E7EB;
+      --button-text: #1C1C3A;
+      --button-border: #A0AEC0;
+      --button-hover-bg: #D0E2F2;
+      --question-loader: url('/static/stars.gif');
+    }
+  
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 40px;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .banner {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center; /* centers the title */
+      padding: 20px;
+      border-radius: 10px;
+      background: var(--banner-gradient);
+      margin-bottom: 30px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .banner h1 {
+      margin: 0;
+      font-size: 2rem;
+      color: #ffffff;
+    }
+    .logo-group {
+      position: absolute;
+      left: 20px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .logo {
+      height: 50px;
+    }
+    .logo.astromlab {
+      height: 60px;  /* slightly larger than default 50px */
+    }
+    #theme-toggle {
+      position: absolute;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #ffffff;
+      color: black;
+      border: 1px solid black;
+      padding: 6px 12px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .input-area {
+      display: flex;
+      align-items: flex-start; 
+      gap: 10px;
+      margin-top: 30px;
+      margin-bottom: 30px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid var(--input-border);
+      border-radius: 5px;
+      background-color: var(--input-bg);
+      color: var(--text-color);
+      height: 100px;           /* Make it taller */
+      resize: none;            /* Prevent resizing if desired */
+      font-size: 1rem;         
+      line-height: 1.4rem;     
+      white-space: pre-wrap;   /* Allow line breaks to show properly */
+    }
+    .instructions-box {
+      max-width: 1200px;
+      margin: 0 auto 30px;
+      padding: 20px;
+      background-color: var(--input-bg);
+      color: var(--text-color);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .instructions-box h2 {
+      margin-top: 0;
+      font-size: 1.2rem;
+      color: var(--text-color);
+    }
+
+    .instructions-box ul {
+      padding-left: 1.2rem;
+    }
+
+    .instructions-box li {
+      margin-bottom: 8px;
+    }
+    textarea#shared-input {
+      flex: 1;
+      padding: 12px;
+      height: 160px;
+      font-size: 0.8rem;
+      line-height: 1.4rem;
+      resize: none;
+      white-space: pre-wrap;
+      border: 1px solid var(--input-border);
+      border-radius: 5px;
+      background-color: var(--input-bg);
+      color: var(--text-color);
+    }
+    .input-area button {
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      height: fit-content; /* Prevent full height expansion */
+      margin-top: 4px;      /* Optional: aligns slightly lower with text */
+    }
+    button {
+      padding: 10px 20px;
+      background-color: var(--button-bg);
+      color: var(--button-text);
+      border: 1px solid var(--button-border);
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover {
+      background-color: var(--button-hover-bg);
+    }
+    button:disabled {
+      background-color: #d1d5db;
+      color: #6b7280;
+      border-color: #d1d5db;
+      cursor: not-allowed;
+    }
+    .chat-container {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      max-width: 100%;
+    }
+    .chat-box {
+      flex: 0 0 48%;
+      border-radius: 8px;
+      padding: 8px;
+      background: var(--chatbox-bg);
+      display: flex;
+      flex-direction: column;
+      height: 430px;
+      color: white;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.15);
+      border: 0.8px solid rgba(255, 255, 255, 0.2);
+    }
+    .chat-box h2 {
+      font-size: 1rem;
+      margin-top: 0;
+      text-align: center;
+      color: #D1E8E4; /* new title color */
+    }
+    .messages {
+      flex: 1;
+      height: 100%;
+      overflow-y: auto;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      word-break: break-word;
+      background-color: var(--messages-bg);
+      color: var(--text-color);
+      border: 1px solid var(--messages-border);
+      border-radius: 5px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .messages div {
+      margin-bottom: 8px;
+    }
+    .vote-buttons button {
+      font-size: 0.9rem;
+      padding: 8px 16px;
+    }
+    .action-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .action-buttons:not(.vote-buttons) button {
+      font-size: 1.2rem;
+      padding: 14px 28px;
+    }
+    /* Common text styling */
+    .loading-text {
+      color: white;
+      font-size: 1.2rem;
+      font-weight: bold;
+      text-align: center;
+      text-shadow: 0 0 6px #000;
+    }
+
+    /* Thinking Loader (Astronaut GIF) */
+    .loader-container {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 9999;
+      background-color: rgba(28, 28, 58, 0.85);
+      padding: 10px;
+      border-radius: 10px;
+      box-shadow: 0 0 40px rgba(52, 52, 52, 0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .loader-gif {
+      width: 150px;
+      height: auto;
+      border-radius: 8px;
+    }
+
+    /* Generating Question Loader (Star Background) */
+    .loader-question-container {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 9999;
+      width: 280px;
+      height: 120px;
+      background-image: var(--question-loader); /* use your GIF here */
+      background-size: cover;
+      background-position: center;
+      border-radius: 12px;
+      box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .shared-solution-box {
+      max-width: 96%;
+      margin: 16px auto;
+      padding: 14px 20px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      text-align: left;
+      transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+
+      background-color: var(--input-bg);
+      color: var(--text-color);
+      border: 1px solid var(--input-border);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+
+  </style>     
+  
+</head>
+<body>
+  <div class="banner">
+    <div class="logo-group">
+      <img src="/static/ornl_logo.jpg" alt="ORNL Logo" class="logo" />
+      <img src="/static/astromlab_logo.png" alt="AstroMLab Logo" class="logo astromlab" />
+    </div>
+    <h1>AstroBench Chatbot Arena</h1>
+    <button id="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+  </div>  
+
+  <div class="instructions-box">
+    <h2>Instructions</h2>
+    <ul>
+      <li><strong>Generate astrophysics questions</strong> to sample from expert-curated datasets, including both multiple choice (MCQ) and open-ended questions.</li>
+      <li>Clicking the button repeatedly will cycle through new scientific prompts until you identify one suitable for evaluation.</li>
+      <li>Use the <strong>Send</strong> button to query two anonymized language models with the selected question.</li>
+      <li>Use <strong>solution box</strong> to review the outputs and cast your vote using one of the four options: <em>Model A Wins</em>, <em>Model B Wins</em>, <em>Tie</em>, or <em>Both Incorrect</em>.</li>
+      <li>You may regenerate a new question at any time or re-use the current one to test consistency.</li>
+    </ul>
+  </div>  
+
+  <div class="chat-container">
+    <div class="chat-box" id="chatbox1">
+      <h2>{{ model_a }}</h2>
+      <div class="messages" id="messages1"></div>
+    </div>
+    <div class="chat-box" id="chatbox2">
+      <h2>{{ model_b }}</h2>
+      <div class="messages" id="messages2"></div>
+    </div>
+  </div>
+
+  <div id="shared-solution" class="shared-solution-box" style="display: none;"></div>
+
+  <!-- Loader for Model Thinking -->
+  <div id="loader-thinking" class="loader-container" style="display: none;">
+    <img src="/static/astronaut.gif" alt="Thinking..." class="loader-gif" />
+    <p class="loading-text">Thinking...</p>
+  </div>
+
+  <!-- Loader for Question Generating -->
+  <div id="loader-question" class="loader-question-container" style="display: none;">
+    <p class="loading-text">Generating a stellar question...</p>
+  </div>
+  
+
+  <!-- Shared prompt input -->
+  <div class="input-area">
+    <textarea id="shared-input" placeholder="Prompt will appear here..." readonly></textarea>
+    <button onclick="sendSharedMessage()">Send</button>
+  </div>
+
+  <!-- Voting buttons -->
+  <div class="action-buttons vote-buttons">
+    <button id="voteA" onclick="submitVote('Model A')" disabled>✅ Model A wins</button>
+    <button id="voteB" onclick="submitVote('Model B')" disabled>✅ Model B wins</button>
+    <button id="voteTie" onclick="submitVote('Tie')" disabled>🤝 Tie</button>
+    <button id="voteWrong" onclick="submitVote('Both Wrong')" disabled>❌ Both wrong</button>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="action-buttons">
+    <button class="action-button" onclick="generatePrompt()">Generate astrophysics questions</button>
+    <!--button class="action-button">Get new model pairs</button-->
+  </div>
+
+  <script>
+    //const prompts = JSON.parse('{{ prompts | safe }}');
+    //let promptIndex = 0;
+    let isFirstGeneration = true;
+
+    async function generatePrompt() {
+      const input = document.getElementById("shared-input");
+      const loader = document.getElementById("loader-question");
+
+      await new Promise(resolve => setTimeout(resolve, 500)); // 2 sec delay
+
+      loader.style.display = "block";
+      // Allow the loader div to render before fetch starts
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      try {
+        const res = await fetch("/generate-prompt");
+        const data = await res.json();
+        //input.value = data.prompt;
+        if (data.type === "mcq") {
+          let formatted = `${data.question}\n`;
+          for (const [key, val] of Object.entries(data.choices)) {
+            formatted += `(${key}) ${val}\n`;
+          }
+          input.value = formatted.trim();
+        } else {
+          input.value = data.question;
+        }
+      } catch (err) {
+        console.error("Error generating prompt:", err);
+      } finally {
+        loader.style.display = "none";
+      }
+    }
+
+  
+    async function sendMessage(botId, text) {
+      const messages = document.getElementById(`messages${botId}`);
+      messages.innerHTML += `<div><strong>Question:</strong> ${text}</div>`;
+  
+      const res = await fetch(`/chat/${botId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+      });
+  
+      const data = await res.json();
+      messages.innerHTML += `<div><strong>Model response:</strong> ${data.response}</div>`;
+      messages.scrollTop = messages.scrollHeight;
+  
+      enableVoteButtons();  // Enable voting after response arrives
+    }
+  
+    async function sendSharedMessage() {
+      document.getElementById("shared-solution").style.display = "none";
+      document.getElementById("shared-solution").innerText = "";
+      const input = document.getElementById("shared-input");
+      const text = input.value;
+      if (!text) return;
+
+      disableVoteButtons();
+      clearMessages();
+      document.getElementById("loader-thinking").style.display = "block"; // Show loader
+
+      try {
+        const res = await fetch('/save-prompt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: text })
+        });
+
+        const data = await res.json();
+
+        const messages1 = document.getElementById('messages1');
+        const messages2 = document.getElementById('messages2');
+
+        messages1.innerHTML += `<div><strong>Question:</strong> ${text}</div>`;
+        messages1.innerHTML += `<div><strong>Model response:</strong> ${data.model_a_response}</div>`;
+
+        messages2.innerHTML += `<div><strong>Question:</strong> ${text}</div>`;
+        messages2.innerHTML += `<div><strong>Model response:</strong> ${data.model_b_response}</div>`;
+
+        messages1.scrollTop = messages1.scrollHeight;
+        messages2.scrollTop = messages2.scrollHeight;
+
+        // Show solution/explanation below chatboxes
+        const solutionBox = document.getElementById('shared-solution');
+        let solutionText = "";
+
+        if (data.correct && data.explanation) {
+          solutionText = `✅ Correct Answer: ${data.correct}\n🧠 Explanation: ${data.explanation}`;
+        } else if (data.answer && data.explanation) {
+          solutionText = `✅ Answer: ${data.answer}\n🧠 Explanation: ${data.explanation}`;
+        } else {
+          solutionText = "ℹ️ No solution available for this question.";
+        }
+
+        solutionBox.innerText = solutionText;
+        solutionBox.style.display = "block";
+        disableActionButtons(); // Disable action buttons here
+        enableVoteButtons();
+      } catch (err) {
+        console.error("Failed to get response:", err);
+      } finally {
+        document.getElementById("loader-thinking").style.display = "none"; // Hide loader
+      }
+    }
+  
+    function enableVoteButtons() {
+      document.getElementById('voteA').disabled = false;
+      document.getElementById('voteB').disabled = false;
+      document.getElementById('voteTie').disabled = false;
+      document.getElementById('voteWrong').disabled = false;
+    }
+  
+    function disableVoteButtons() {
+      document.getElementById('voteA').disabled = true;
+      document.getElementById('voteB').disabled = true;
+      document.getElementById('voteTie').disabled = true;
+      document.getElementById('voteWrong').disabled = true;
+    }
+  
+    async function submitVote(voteId) {
+      await fetch('/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vote: voteId })
+      });
+      disableVoteButtons();  // Disable again after voting
+      clearMessages();       // Clear the chatboxes after voting
+
+      // Hide the solution box
+      const solutionBox = document.getElementById('shared-solution');
+      solutionBox.style.display = 'none';
+      solutionBox.innerText = '';
+
+      // Re-enable action buttons
+      enableActionButtons();
+    }
+
+  
+    function clearMessages() {
+      document.getElementById('messages1').innerHTML = '';
+      document.getElementById('messages2').innerHTML = '';
+    }
+
+    function toggleTheme() {
+      const root = document.documentElement;
+      const toggleButton = document.getElementById('theme-toggle');
+      
+      if (root.style.getPropertyValue('--bg-color') === '#121212') {
+        // Switch to Light Mode
+        root.style.setProperty('--bg-color', '#dee2e6');
+        root.style.setProperty('--text-color', '#111');
+        root.style.setProperty('--input-bg', '#ffffff');
+        root.style.setProperty('--input-border', '#ccc');
+        root.style.setProperty('--button-bg', '#E5E7EB');           // NEW
+        root.style.setProperty('--button-text', '#1C1C3A');         // NEW
+        root.style.setProperty('--button-border', '#A0AEC0');       // NEW
+        root.style.setProperty('--button-hover-bg', '#D0E2F2');     // NEW
+        root.style.setProperty('--messages-bg', '#f1f5f9');
+        root.style.setProperty('--messages-border', '#ccc');
+        toggleButton.innerHTML = '🌙 Dark Mode';
+      } else {
+        // Switch to Dark Mode
+        root.style.setProperty('--bg-color', '#121212');
+        root.style.setProperty('--text-color', '#e0e0e0');
+        root.style.setProperty('--input-bg', '#1e1e1e');
+        root.style.setProperty('--input-border', '#444');
+        root.style.setProperty('--button-bg', '#1F2937');
+        root.style.setProperty('--button-text', '#9AE3D9');
+        root.style.setProperty('--button-border', '#00B4D8');
+        root.style.setProperty('--button-hover-bg', '#005F73');
+        root.style.setProperty('--messages-bg', '#1e1e1e');
+        root.style.setProperty('--messages-border', '#333');
+        toggleButton.innerHTML = '☀️ Light Mode';
+      }
+    }
+
+    function disableActionButtons() {
+      const actions = document.querySelectorAll(".action-button");
+      actions.forEach(btn => btn.disabled = true);
+    }
+
+    function enableActionButtons() {
+      const actions = document.querySelectorAll(".action-button");
+      actions.forEach(btn => btn.disabled = false);
+    }
+
+  </script>
+  
+</body>
+
+</html>
