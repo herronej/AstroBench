@@ -3,10 +3,6 @@ from datasets import load_dataset
 import random
 
 
-# Authenticate (use a token with "read" access to private repos)
-login(token="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")
-
-
 class QuestionSampler:
     def __init__(self, seed=None):
         if seed is not None:

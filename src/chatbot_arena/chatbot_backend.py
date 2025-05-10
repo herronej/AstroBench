@@ -101,8 +101,8 @@ async def save_prompt(data: PromptInput, session_id: str = Cookie(None)):
     global latest_prompt
 
     # set environment variables with endpoint url and api key
-    os.environ["SAMBASTUDIO_URL"] = "https://sambanova.cades.ornl.gov/api/v2/predict/generic/37174856-d664-49f5-bede-eeb956c881b4/8b3a20e7-c841-444a-9000-3aa151d5edfe"
-    os.environ["SAMBASTUDIO_API_KEY"] = "b647941d-9160-4095-b639-ecd6b8443cbb"
+    os.environ["SAMBASTUDIO_URL"] = "<endpoint-url>"
+    os.environ["SAMBASTUDIO_API_KEY"] = "<api_key>"
 
     latest_prompt = data.prompt
     session = user_sessions.get(session_id)

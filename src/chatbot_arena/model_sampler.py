@@ -4,6 +4,7 @@ from collections import defaultdict
 
 DB_PATH = "votes.db"
 
+#arena model list
 MODELS = [
     'astrollama-2-70b-chat_aic', 
     'astrollama-3-8b-chat_aic', 
