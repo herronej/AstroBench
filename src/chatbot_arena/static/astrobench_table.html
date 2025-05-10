@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AstroBench</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f9fafb;
+      margin: 0;
+      padding: 40px;
+    }
+    .banner {
+    background: linear-gradient(90deg, #00662C, #00454D);
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    }
+    .banner h1 {
+    margin: 0;
+    font-size: 2.5rem;
+    color: #ffffff;
+    }    
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .tabs {
+        display: flex;
+        gap: 0;
+        margin-bottom: 10px;
+        position: relative;
+        z-index: 2;
+    }
+    .tabs-container {
+        display: flex;
+        justify-content: flex-start;
+        margin-bottom: 10px;
+        max-width: 900px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .tab-button {
+        background: #ffffff;
+        border: 1px solid #ccc;
+        padding: 14px 28px;
+        cursor: pointer;
+        border-right: none;
+        font-size: 1rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .tab-button:first-child {
+        border-top-left-radius: 9px;
+        border-bottom-left-radius: 9px;
+    }
+    .tab-button:last-child {
+        border-right: 1px solid #ccc;
+        border-top-right-radius: 9px;
+        border-bottom-right-radius: 9px;
+    }
+    .tab-button:hover {
+      background-color: #DBDCDB;
+    }
+    .tab-button.active {
+      background-color: #00662C;
+      color: white;
+      border-color: #00662C;
+      z-index: 1;
+    }
+    .tab-content {
+      display: none;
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+      padding: 20px;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    .table-wrapper {
+        overflow-x: auto;
+        width: 100%;
+    }
+    th, td {
+      padding: 12px 15px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background-color: #f3f4f6;
+      font-weight: 600;
+    }
+    tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+    .clickable {
+      color: #2563eb;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .info-box {
+      margin-top: 20px;
+      font-size: 16px;
+      color: #444;
+      padding: 10px;
+      background: #f1f5f9;
+      border-radius: 6px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <h1>AstroBench</h1>
+  </div>
+  <div id="tab-0" class="tab-content active">
+    <div class="tabs-container">
+      <div class="tabs">
+        <button class="tab-button active" onclick="showTab(0)">Overview</button>
+        <button class="tab-button" onclick="showTab(1)">Q/A</button>
+        <button class="tab-button" onclick="showTab(2)">USAAAO Competition</button>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr>
+          <th>Col 1</th><th>Col 2</th><th>Col 3</th><th>Col 4</th><th>Col 5</th>
+        </tr></thead>
+        <tbody id="table-body-0"></tbody>
+      </table>
+    </div>
+  </div>
+  
+  <!-- Tab 1 -->
+  <div id="tab-1" class="tab-content">
+    <div class="tabs-container">
+      <div class="tabs">
+        <button class="tab-button" onclick="showTab(0)">Overview</button>
+        <button class="tab-button active" onclick="showTab(1)">Q/A</button>
+        <button class="tab-button" onclick="showTab(2)">USAAAO Competition</button>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr>
+          <th>Col 1</th><th>Col 2</th><th>Col 3</th><th>Col 4</th><th>Col 5</th>
+        </tr></thead>
+        <tbody id="table-body-1"></tbody>
+      </table>
+    </div>
+    <div id="info-box-1" class="info-box"></div>
+  </div>
+  
+  <!-- Tab 2 -->
+  <div id="tab-2" class="tab-content">
+    <div class="tabs-container">
+      <div class="tabs">
+        <button class="tab-button" onclick="showTab(0)">Overview</button>
+        <button class="tab-button" onclick="showTab(1)">Q/A</button>
+        <button class="tab-button active" onclick="showTab(2)">USAAAO</button>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr>
+          <th>Col 1</th><th>Col 2</th><th>Col 3</th><th>Col 4</th><th>Col 5</th>
+        </tr></thead>
+        <tbody id="table-body-2"></tbody>
+      </table>
+    </div>
+    <div id="info-box-2" class="info-box"></div>
+  </div>
+
+  <script>
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    function showTab(index) {
+      tabButtons.forEach((btn, i) => {
+        btn.classList.toggle('active', i === index);
+        tabContents[i].classList.toggle('active', i === index);
+      });
+    }
+
+    fetch('/data')
+      .then(response => response.json())
+      .then(data => {
+        for (let i = 0; i < 3; i++) {
+          const tbody = document.getElementById(`table-body-${i}`);
+          data.rows.forEach((row, rowIndex) => {
+            const tr = document.createElement('tr');
+            row.forEach((cell, colIndex) => {
+              const td = document.createElement('td');
+              if (i > 0 && colIndex > 0) {
+                td.innerHTML = `<span class="clickable" onclick="showInfo(${i}, ${rowIndex}, ${colIndex})">${cell} (T${i+1})</span>`;
+              } else {
+                td.textContent = cell + (i === 0 ? '' : ` (T${i+1})`);
+              }
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+        }
+        window.displayTexts = data.texts;
+      });
+
+    function showInfo(tabId, row, col) {
+      const box = document.getElementById(`info-box-${tabId}`);
+      const key = `${tabId}-${row}-${col}`;
+      box.textContent = window.displayTexts[key] || 'No info available.';
+      box.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
