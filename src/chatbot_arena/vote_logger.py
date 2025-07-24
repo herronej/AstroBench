@@ -14,6 +14,7 @@ def init_db():
         conn.execute("""
         CREATE TABLE IF NOT EXISTS votes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            astro_background TEXT,
             session_id TEXT,
             timestamp TEXT,
             question_type TEXT,
@@ -28,18 +29,18 @@ def init_db():
         );
         """)
 
-def log_vote(session_id, question_type, question, correct_answer, explanation,
+def log_vote(astro_background, session_id, question_type, question, correct_answer, explanation,
              model_a, model_a_response, model_b, model_b_response, vote):
     timestamp = datetime.utcnow().isoformat()
     with sqlite3.connect(DB_PATH, timeout=10) as conn:
         conn.execute("""
         INSERT INTO votes (
-            session_id, timestamp, question_type, question,
+            astro_background, session_id, timestamp, question_type, question,
             correct_answer, explanation, model_a, model_a_response,
             model_b, model_b_response, vote
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            session_id, timestamp, question_type, question, correct_answer, explanation,
+            astro_background, session_id, timestamp, question_type, question, correct_answer, explanation,
             model_a, model_a_response, model_b, model_b_response, vote
         ))
         conn.commit()

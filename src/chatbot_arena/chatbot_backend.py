@@ -10,6 +10,7 @@ from fastapi import Cookie, Response
 from fastapi.requests import Request
 from pydantic import BaseModel
 from langchain_community.llms.sambanova import SambaStudio
+from config import *
 from dataset_sampler import QuestionSampler 
 from vote_logger import init_db, log_vote
 from model_sampler import get_next_model_pair
@@ -45,6 +46,7 @@ class PromptInput(BaseModel):
 
 class VoteRequest(BaseModel):
     vote: str
+    astro_background: str
 
 @app.get("/chatbot", response_class=HTMLResponse)
 async def render_chatbot_ui(request: Request):
@@ -55,21 +57,6 @@ async def render_chatbot_ui(request: Request):
         #"prompts": json.dumps(prompts)
     })
 
-'''
-@app.get("/generate-prompt")
-async def generate_prompt(session_id: str = Cookie(None)):
-    if session_id not in user_sessions: 
-        user_sessions[session_id] = QuestionSampler()
-    sampler = user_sessions[session_id]
-    next_q = sampler.get_next_question()
-
-    # Save question so we can fetch correct/answer/explanation later
-    user_sessions[session_id].last_question = next_q
-
-    print(f"[session {session_id[:8]}...] {next_q['type'].upper()} → {next_q['question'][:80]}")
-
-    return next_q  # return entire question dict
-'''
 
 @app.get("/generate-prompt")
 async def generate_prompt(session_id: str = Cookie(None)):
@@ -101,8 +88,8 @@ async def save_prompt(data: PromptInput, session_id: str = Cookie(None)):
     global latest_prompt
 
     # set environment variables with endpoint url and api key
-    os.environ["SAMBASTUDIO_URL"] = "<endpint_url>"
-    os.environ["SAMBASTUDIO_API_KEY"] = "<api_key>"
+    os.environ["SAMBASTUDIO_URL"] = api_url
+    os.environ["SAMBASTUDIO_API_KEY"] = api_key
 
     latest_prompt = data.prompt
     session = user_sessions.get(session_id)
@@ -176,9 +163,11 @@ async def receive_vote(vote_request: VoteRequest, session_id: str = Cookie(None)
         model_a_response=last_q.get("model_a_response", ""),
         model_b=last_q.get("model_b", ""),
         model_b_response=last_q.get("model_b_response", ""),
-        vote=vote_request.vote
+        vote=vote_request.vote,
+        astro_background=vote_request.astro_background
     )
-    print(f"Vote received: {vote_request.vote}", flush=True)  # Later save to database or log
+    #print(f"Vote received: {vote_request.vote}", flush=True)  # Later save to database or log
+    print(f"Vote received: {vote_request.vote} (Background: {vote_request.astro_background})", flush=True)
     return {"message": "Vote registered successfully"}
 
 if __name__ == "__main__":

@@ -297,6 +297,13 @@
     <button id="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
   </div>  
 
+  <div id="background-check" class="instructions-box">
+    <h2>Before we begin</h2>
+    <p><strong>This does not disqualify you from voting!</strong> Do you have a background in Astrophysics? Current graduate students and above will count as having a background.</p>
+    <button onclick="setAstroBackground(true)">✅ Yes</button>
+    <button onclick="setAstroBackground(false)">❌ No</button>
+  </div>
+
   <div class="instructions-box">
     <h2>Instructions</h2>
     <ul>
@@ -304,7 +311,7 @@
       <li>Clicking the button repeatedly will cycle through new scientific prompts until you identify one suitable for evaluation.</li>
       <li>Use the <strong>Send</strong> button to query two anonymized language models with the selected question.</li>
       <li>Use <strong>solution box</strong> to review the outputs and cast your vote using one of the four options: <em>Model A Wins</em>, <em>Model B Wins</em>, <em>Tie</em>, or <em>Both Incorrect</em>.</li>
-      <li>You may regenerate a new question at any time or re-use the current one to test consistency.</li>
+      <li>You may regenerate a new question at any time or re-use the current one to cycle through more model pairs.</li>
     </ul>
   </div>  
 
@@ -396,7 +403,10 @@
       const res = await fetch(`/chat/${botId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({
+          vote: voteId,
+          astro_background: hasAstroBackground || "Unknown"
+        })
       });
   
       const data = await res.json();
@@ -417,23 +427,26 @@
       clearMessages();
       document.getElementById("loader-thinking").style.display = "block"; // Show loader
 
+      // Set placeholders BEFORE awaiting fetch
+      const messages1 = document.getElementById('messages1');
+      const messages2 = document.getElementById('messages2');
+      messages1.innerHTML = `<div><strong>Question:</strong> ${text}</div><div id="modelA-response"><em>Loading response from Model A...</em></div>`;
+      messages2.innerHTML = `<div><strong>Question:</strong> ${text}</div><div id="modelB-response"><em>Loading response from Model B...</em></div>`;
+
       try {
         const res = await fetch('/save-prompt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt: text })
         });
-
         const data = await res.json();
 
-        const messages1 = document.getElementById('messages1');
-        const messages2 = document.getElementById('messages2');
+        // Defensive fallback if response is blank
+        const aResponse = data.model_a_response?.trim() || "<em>No response from Model A.</em>";
+        const bResponse = data.model_b_response?.trim() || "<em>No response from Model B.</em>";  
 
-        messages1.innerHTML += `<div><strong>Question:</strong> ${text}</div>`;
-        messages1.innerHTML += `<div><strong>Model response:</strong> ${data.model_a_response}</div>`;
-
-        messages2.innerHTML += `<div><strong>Question:</strong> ${text}</div>`;
-        messages2.innerHTML += `<div><strong>Model response:</strong> ${data.model_b_response}</div>`;
+        document.getElementById("modelA-response").innerHTML = `<strong>Model response:</strong> ${aResponse}`;
+        document.getElementById("modelB-response").innerHTML = `<strong>Model response:</strong> ${bResponse}`;
 
         messages1.scrollTop = messages1.scrollHeight;
         messages2.scrollTop = messages2.scrollHeight;
@@ -456,6 +469,8 @@
         enableVoteButtons();
       } catch (err) {
         console.error("Failed to get response:", err);
+        document.getElementById("modelA-response").innerHTML = `<strong>Error:</strong> Model A failed.`;
+        document.getElementById("modelB-response").innerHTML = `<strong>Error:</strong> Model B failed.`;
       } finally {
         document.getElementById("loader-thinking").style.display = "none"; // Hide loader
       }
@@ -476,10 +491,11 @@
     }
   
     async function submitVote(voteId) {
+      const background = localStorage.getItem("astro_background") || "unspecified";
       await fetch('/vote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vote: voteId })
+        body: JSON.stringify({ vote: voteId, astro_background: background })
       });
       disableVoteButtons();  // Disable again after voting
       clearMessages();       // Clear the chatboxes after voting
@@ -540,6 +556,36 @@
     function enableActionButtons() {
       const actions = document.querySelectorAll(".action-button");
       actions.forEach(btn => btn.disabled = false);
+    }
+
+    let hasAstroBackground = null;
+
+    function setAstroBackground(value) {
+      hasAstroBackground = value ? "Yes" : "No";
+      localStorage.setItem("astro_background", hasAstroBackground);
+      document.getElementById("background-check").style.display = "none";
+      enableArena();
+    }
+
+    function enableArena() {
+      // Enable input, buttons
+      document.querySelectorAll(".action-button, .vote-buttons button").forEach(btn => btn.disabled = false);
+      document.getElementById("shared-input").disabled = false;
+    }
+
+    function disableArena() {
+      document.querySelectorAll(".action-button, .vote-buttons button").forEach(btn => btn.disabled = true);
+      document.getElementById("shared-input").disabled = true;
+    }
+
+    window.onload = () => {
+      if (!localStorage.getItem("astro_background")) {
+        disableArena();
+        document.getElementById("background-check").style.display = "block";
+      } else {
+        hasAstroBackground = localStorage.getItem("astro_background");
+        enableArena();
+      }
     }
 
   </script>
