@@ -1,10 +1,11 @@
 from huggingface_hub import login
 from datasets import load_dataset
 import random
+from config import *
 
 
 # Authenticate (use a token with "read" access to private repos)
-#login(token="<hf_toke>")
+login(token=hf_token)
 
 
 class QuestionSampler:
