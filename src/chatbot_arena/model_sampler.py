@@ -10,6 +10,7 @@ MODELS = [
     'astrollama-3-8b-chat_summary', 
     'astrollama-2-7b-chat_aic', 
     'AstroSage-8B',
+    'AstroSage-70B', 
     'Meta-Llama-3-8B-Instruct', 
     'Meta-Llama-3-70B-Instruct',
     'Meta-Llama-3.1-405B-Instruct-FP8',
