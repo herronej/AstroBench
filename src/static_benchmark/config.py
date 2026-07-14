@@ -5,11 +5,24 @@ This file is intentionally simple so you can edit it directly.
 """
 
 # OpenAI credentials for judge mode.
+# For plain OpenAI:
+#   OPENAI_API_KEY = "sk-..."
+#   OPENAI_BASE_URL = None
+#
+# For Azure OpenAI:
+#   OPENAI_USE_AZURE = True
+#   OPENAI_API_KEY = "..."
+#   OPENAI_AZURE_ENDPOINT = "https://your-resource.openai.azure.com"
+#   OPENAI_API_VERSION = "2025-01-01-preview"
+#   OPENAI_JUDGE_MODEL = "your-deployment-name"
 OPENAI_API_KEY = ""
 OPENAI_BASE_URL = None
+OPENAI_USE_AZURE = False
+OPENAI_AZURE_ENDPOINT = None
+OPENAI_API_VERSION = None
 
 # Judge model to use with the OpenAI Responses API.
-# A current balance pick is "gpt-5.6"; you can also pin a specific variant.
+# For Azure OpenAI, this should be your deployment name.
 OPENAI_JUDGE_MODEL = "gpt-5.6"
 
 # Embedding model for cosine similarity.

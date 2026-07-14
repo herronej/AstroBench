@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import statistics
 import sys
 import time
@@ -286,20 +287,61 @@ class CosineScorer:
 
 class OpenAIJudge:
     def __init__(self, model_name: str):
+        self.client = self._build_client()
+        self.model_name = model_name
+
+    def _build_client(self):
+        api_key = os.getenv("OPENAI_API_KEY") or config.OPENAI_API_KEY
+        base_url = os.getenv("OPENAI_BASE_URL") or config.OPENAI_BASE_URL
+        azure_endpoint = (
+            os.getenv("AZURE_OPENAI_ENDPOINT")
+            or os.getenv("OPENAI_AZURE_ENDPOINT")
+            or config.OPENAI_AZURE_ENDPOINT
+        )
+        api_version = os.getenv("OPENAI_API_VERSION") or config.OPENAI_API_VERSION
+        use_azure_env = os.getenv("OPENAI_USE_AZURE")
+        use_azure = config.OPENAI_USE_AZURE
+        if use_azure_env is not None:
+            use_azure = use_azure_env.lower() in {"1", "true", "yes", "on"}
+
+        if not api_key:
+            raise ValueError(
+                "No OpenAI API key found. Set OPENAI_API_KEY in the environment or in "
+                "src/static_benchmark/config.py."
+            )
+
+        if use_azure:
+            azure_client = nested_import("openai", "AzureOpenAI")
+            if azure_client is None:
+                raise ImportError(
+                    "The openai package with AzureOpenAI support is required for judge mode. "
+                    "Install it with `pip install openai`."
+                )
+            if not azure_endpoint:
+                raise ValueError(
+                    "Azure judge mode is enabled but no endpoint was provided. Set "
+                    "OPENAI_AZURE_ENDPOINT in config.py or AZURE_OPENAI_ENDPOINT in the environment."
+                )
+            if not api_version:
+                raise ValueError(
+                    "Azure judge mode is enabled but no API version was provided. Set "
+                    "OPENAI_API_VERSION in config.py or the environment."
+                )
+            return azure_client(
+                api_key=api_key,
+                azure_endpoint=azure_endpoint,
+                api_version=api_version,
+            )
+
         openai_client = nested_import("openai", "OpenAI")
         if openai_client is None:
             raise ImportError(
                 "openai is required for judge mode. Install it with `pip install openai`."
             )
-        if not config.OPENAI_API_KEY:
-            raise ValueError(
-                "config.OPENAI_API_KEY is empty. Add your API key in src/static_benchmark/config.py."
-            )
-        kwargs = {"api_key": config.OPENAI_API_KEY}
-        if config.OPENAI_BASE_URL:
-            kwargs["base_url"] = config.OPENAI_BASE_URL
-        self.client = openai_client(**kwargs)
-        self.model_name = model_name
+        kwargs = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        return openai_client(**kwargs)
 
     def judge(self, question: str, reference_answer: str, model_answer: str) -> Dict[str, Any]:
         prompt = (

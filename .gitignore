@@ -8,7 +8,6 @@ py39/
 venv/
 
 # Local benchmark secrets and outputs
-src/static_benchmark/config.py
 src/static_benchmark/benchmark_results/
 
 # Scratch / generated local benchmark artifacts
