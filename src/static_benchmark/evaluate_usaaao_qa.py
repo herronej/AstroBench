@@ -29,7 +29,7 @@ import config
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DATA_DIR = SCRIPT_DIR / "USAAAO_QA" / "data"
+DEFAULT_DATASET_ROOT = SCRIPT_DIR / "usaaao_qa_local"
 OUTPUT_DIR = SCRIPT_DIR / "benchmark_results"
 
 
@@ -66,6 +66,12 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=[2017, 2018, 2019],
         help="Years to evaluate.",
+    )
+    parser.add_argument(
+        "--dataset-root",
+        type=Path,
+        default=DEFAULT_DATASET_ROOT,
+        help="Dataset root directory containing `data/` and optionally `images/`.",
     )
     parser.add_argument(
         "--limit",
@@ -114,10 +120,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_examples(years: Iterable[int]) -> List[Example]:
+def load_examples(years: Iterable[int], dataset_root: Path) -> List[Example]:
     examples: List[Example] = []
+    data_dir = dataset_root / "data"
     for year in years:
-        path = DATA_DIR / f"{year}.jsonl"
+        path = data_dir / f"{year}.jsonl"
         if not path.exists():
             raise FileNotFoundError(f"Missing dataset file: {path}")
         with path.open() as handle:
@@ -126,7 +133,7 @@ def load_examples(years: Iterable[int]) -> List[Example]:
                 image_rel = row.get("image")
                 image_path = None
                 if image_rel:
-                    image_path = (SCRIPT_DIR / "USAAAO_QA" / image_rel).resolve()
+                    image_path = (dataset_root / image_rel).resolve()
                 examples.append(
                     Example(
                         record_id=row["id"],
@@ -479,13 +486,15 @@ def print_summary(summary: Dict[str, Any]) -> None:
 def main() -> int:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    dataset_root = args.dataset_root.resolve()
 
-    examples = filter_examples(load_examples(args.years), args)
+    examples = filter_examples(load_examples(args.years, dataset_root), args)
     if not examples:
         print("No examples matched the requested filters.", file=sys.stderr)
         return 1
 
     print(f"Loaded {len(examples)} examples.")
+    print(f"Dataset root: {dataset_root}")
     print(f"Generation model: {args.model}")
     print(f"Judge enabled: {args.judge}")
 
