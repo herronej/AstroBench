@@ -21,6 +21,7 @@ import os
 import statistics
 import sys
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -51,6 +52,21 @@ class Example:
     reference_answer: str
     image_path: Optional[Path]
     raw: Dict[str, Any]
+
+
+class TeeStream:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data: str) -> int:
+        for stream in self.streams:
+            stream.write(data)
+            stream.flush()
+        return len(data)
+
+    def flush(self) -> None:
+        for stream in self.streams:
+            stream.flush()
 
 
 def parse_args() -> argparse.Namespace:
@@ -487,97 +503,117 @@ def main() -> int:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     dataset_root = args.dataset_root.resolve()
-
-    examples = filter_examples(load_examples(args.years, dataset_root), args)
-    if not examples:
-        print("No examples matched the requested filters.", file=sys.stderr)
-        return 1
-
-    print(f"Loaded {len(examples)} examples.")
-    print(f"Dataset root: {dataset_root}")
-    print(f"Generation model: {args.model}")
-    print(f"Judge enabled: {args.judge}")
-
-    generator = GemmaGenerator(
-        model_name=args.model,
-        max_new_tokens=args.max_new_tokens,
-        temperature=args.temperature,
-    )
-
-    cosine_scorer = None
-    try:
-        cosine_scorer = CosineScorer(config.EMBEDDING_MODEL_NAME)
-    except ImportError as exc:
-        print(f"Skipping cosine similarity: {exc}")
-
-    bertscore_scorer = None
-    try:
-        bertscore_scorer = BERTScoreScorer()
-    except ImportError as exc:
-        print(f"Skipping BERTScore: {exc}")
-
-    judge = None
-    if args.judge:
-        judge = OpenAIJudge(args.judge_model)
-
-    rows: List[Dict[str, Any]] = []
-    start = time.time()
-    for index, example in enumerate(examples, start=1):
-        print(f"[{index}/{len(examples)}] {example.record_id}")
-        prediction = generator.generate(example)
-
-        row: Dict[str, Any] = {
-            "id": example.record_id,
-            "year": example.year,
-            "question_length": example.question_length,
-            "has_image": example.image_path is not None,
-            "question": example.question,
-            "reference_answer": example.reference_answer,
-            "prediction": prediction,
-            "bleu": compute_bleu(example.reference_answer, prediction),
-            "rouge_l": compute_rouge_l(example.reference_answer, prediction),
-            "bertscore_f1": None,
-            "cosine_similarity": None,
-            "judge_verdict": None,
-            "judge_score": None,
-            "judge_rationale": None,
-        }
-
-        if bertscore_scorer is not None:
-            row["bertscore_f1"] = bertscore_scorer.score(
-                example.reference_answer, prediction
-            )
-
-        if cosine_scorer is not None:
-            row["cosine_similarity"] = cosine_scorer.score(
-                example.reference_answer, prediction
-            )
-
-        if judge is not None:
-            judged = judge.judge(example.question, example.reference_answer, prediction)
-            row["judge_verdict"] = judged.get("verdict")
-            row["judge_score"] = judged.get("score")
-            row["judge_rationale"] = judged.get("rationale")
-
-        rows.append(row)
-
-    summary = summarize(rows)
-    summary["elapsed_seconds"] = round(time.time() - start, 2)
-    summary["generation_model"] = args.model
-    summary["judge_model"] = args.judge_model if args.judge else None
-
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     stem = f"usaaao_gemma_eval_{timestamp}"
-    csv_path = args.output_dir / f"{stem}.csv"
-    json_path = args.output_dir / f"{stem}_summary.json"
+    log_path = args.output_dir / f"{stem}.log"
 
-    write_csv(csv_path, rows)
-    json_path.write_text(json.dumps(summary, indent=2))
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    log_handle = log_path.open("w")
+    sys.stdout = TeeStream(original_stdout, log_handle)
+    sys.stderr = TeeStream(original_stderr, log_handle)
 
-    print_summary(summary)
-    print(f"\nWrote per-example results to: {csv_path}")
-    print(f"Wrote summary to: {json_path}")
-    return 0
+    try:
+        print(f"Logging to: {log_path}")
+        examples = filter_examples(load_examples(args.years, dataset_root), args)
+        if not examples:
+            print("No examples matched the requested filters.", file=sys.stderr)
+            return 1
+
+        print(f"Loaded {len(examples)} examples.")
+        print(f"Dataset root: {dataset_root}")
+        print(f"Generation model: {args.model}")
+        print(f"Judge enabled: {args.judge}")
+
+        generator = GemmaGenerator(
+            model_name=args.model,
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.temperature,
+        )
+
+        cosine_scorer = None
+        try:
+            cosine_scorer = CosineScorer(config.EMBEDDING_MODEL_NAME)
+        except ImportError as exc:
+            print(f"Skipping cosine similarity: {exc}")
+
+        bertscore_scorer = None
+        try:
+            bertscore_scorer = BERTScoreScorer()
+        except ImportError as exc:
+            print(f"Skipping BERTScore: {exc}")
+
+        judge = None
+        if args.judge:
+            judge = OpenAIJudge(args.judge_model)
+
+        rows: List[Dict[str, Any]] = []
+        start = time.time()
+        for index, example in enumerate(examples, start=1):
+            print(f"[{index}/{len(examples)}] {example.record_id}")
+            prediction = generator.generate(example)
+
+            row: Dict[str, Any] = {
+                "id": example.record_id,
+                "year": example.year,
+                "question_length": example.question_length,
+                "has_image": example.image_path is not None,
+                "question": example.question,
+                "reference_answer": example.reference_answer,
+                "prediction": prediction,
+                "bleu": compute_bleu(example.reference_answer, prediction),
+                "rouge_l": compute_rouge_l(example.reference_answer, prediction),
+                "bertscore_f1": None,
+                "cosine_similarity": None,
+                "judge_verdict": None,
+                "judge_score": None,
+                "judge_rationale": None,
+            }
+
+            if bertscore_scorer is not None:
+                row["bertscore_f1"] = bertscore_scorer.score(
+                    example.reference_answer, prediction
+                )
+
+            if cosine_scorer is not None:
+                row["cosine_similarity"] = cosine_scorer.score(
+                    example.reference_answer, prediction
+                )
+
+            if judge is not None:
+                judged = judge.judge(example.question, example.reference_answer, prediction)
+                row["judge_verdict"] = judged.get("verdict")
+                row["judge_score"] = judged.get("score")
+                row["judge_rationale"] = judged.get("rationale")
+
+            rows.append(row)
+
+        summary = summarize(rows)
+        summary["elapsed_seconds"] = round(time.time() - start, 2)
+        summary["generation_model"] = args.model
+        summary["judge_model"] = args.judge_model if args.judge else None
+        summary["log_file"] = str(log_path)
+
+        csv_path = args.output_dir / f"{stem}.csv"
+        json_path = args.output_dir / f"{stem}_summary.json"
+
+        write_csv(csv_path, rows)
+        json_path.write_text(json.dumps(summary, indent=2))
+
+        print_summary(summary)
+        print(f"\nWrote per-example results to: {csv_path}")
+        print(f"Wrote summary to: {json_path}")
+        print(f"Wrote log to: {log_path}")
+        return 0
+    except Exception:
+        print("\nBenchmark run failed with an exception:", file=sys.stderr)
+        traceback.print_exc()
+        print(f"\nPartial log captured at: {log_path}", file=sys.stderr)
+        return 1
+    finally:
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+        log_handle.close()
 
 
 if __name__ == "__main__":
