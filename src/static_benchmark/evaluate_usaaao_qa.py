@@ -100,11 +100,30 @@ def shard_examples(
     return examples[shard_index::num_shards]
 
 
-def make_run_stem(run_stem: Optional[str]) -> str:
+def model_slug(model_name: str) -> str:
+    slug = model_name.split("/")[-1].lower()
+    allowed = []
+    previous_dash = False
+    for char in slug:
+        if char.isalnum() or char == ".":
+            allowed.append(char)
+            previous_dash = False
+        else:
+            if not previous_dash:
+                allowed.append("-")
+                previous_dash = True
+    slug = "".join(allowed).strip("-")
+    slug = slug.replace("-instruct", "")
+    slug = slug.replace("-it", "")
+    slug = slug.replace("-chat", "")
+    return slug or "model"
+
+
+def make_run_stem(run_stem: Optional[str], model_name: str) -> str:
     if run_stem:
         return run_stem
     timestamp = time.strftime("%Y%m%d-%H%M%S")
-    return f"usaaao_gemma_eval_{timestamp}"
+    return f"usaaao_{model_slug(model_name)}_eval_{timestamp}"
 
 
 def worker_suffix(num_shards: int, shard_index: int) -> str:
@@ -760,7 +779,7 @@ def main() -> int:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     dataset_root = args.dataset_root.resolve()
-    run_stem = make_run_stem(args.run_stem)
+    run_stem = make_run_stem(args.run_stem, args.model)
     paths = build_output_paths(args.output_dir, run_stem, args.num_shards, args.shard_index)
     log_path = paths["log"]
 
