@@ -18,6 +18,7 @@ import argparse
 import csv
 import json
 import os
+import subprocess
 import statistics
 import sys
 import time
@@ -57,16 +58,70 @@ class Example:
 class TeeStream:
     def __init__(self, *streams):
         self.streams = streams
+        self._closed = False
 
     def write(self, data: str) -> int:
+        if self._closed:
+            return 0
         for stream in self.streams:
             stream.write(data)
             stream.flush()
         return len(data)
 
     def flush(self) -> None:
+        if self._closed:
+            return
         for stream in self.streams:
             stream.flush()
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        for stream in self.streams:
+            close_method = getattr(stream, "close", None)
+            if close_method is not None:
+                close_method()
+        self._closed = True
+
+
+def parse_parallel_devices(parallel_devices: Optional[str]) -> List[str]:
+    if not parallel_devices:
+        return []
+    return [part.strip() for part in parallel_devices.split(",") if part.strip()]
+
+
+def shard_examples(
+    examples: List[Example], num_shards: int, shard_index: int
+) -> List[Example]:
+    if num_shards < 1:
+        raise ValueError("--num-shards must be at least 1.")
+    if shard_index < 0 or shard_index >= num_shards:
+        raise ValueError("--shard-index must satisfy 0 <= shard-index < num-shards.")
+    return examples[shard_index::num_shards]
+
+
+def make_run_stem(run_stem: Optional[str]) -> str:
+    if run_stem:
+        return run_stem
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    return f"usaaao_gemma_eval_{timestamp}"
+
+
+def worker_suffix(num_shards: int, shard_index: int) -> str:
+    if num_shards <= 1:
+        return ""
+    return f"_worker{shard_index:02d}"
+
+
+def build_output_paths(
+    output_dir: Path, run_stem: str, num_shards: int, shard_index: int
+) -> Dict[str, Path]:
+    suffix = worker_suffix(num_shards, shard_index)
+    return {
+        "log": output_dir / f"{run_stem}{suffix}.log",
+        "csv": output_dir / f"{run_stem}{suffix}.csv",
+        "summary": output_dir / f"{run_stem}{suffix}_summary.json",
+    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -132,6 +187,31 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=OUTPUT_DIR,
         help="Directory for outputs.",
+    )
+    parser.add_argument(
+        "--parallel-devices",
+        default=None,
+        help=(
+            "Comma-separated device ids to use in parallel, e.g. `0,1,2,3`. "
+            "On Frontier, these are the ROCm-visible GPU/GCD ids."
+        ),
+    )
+    parser.add_argument(
+        "--num-shards",
+        type=int,
+        default=1,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--shard-index",
+        type=int,
+        default=0,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--run-stem",
+        default=None,
+        help=argparse.SUPPRESS,
     )
     return parser.parse_args()
 
@@ -453,6 +533,79 @@ def summarize(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     return summary
 
 
+def build_worker_command(
+    args: argparse.Namespace, run_stem: str, num_shards: int, shard_index: int
+) -> List[str]:
+    cmd = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--model",
+        args.model,
+        "--dataset-root",
+        str(args.dataset_root),
+        "--years",
+        *[str(year) for year in args.years],
+        "--max-new-tokens",
+        str(args.max_new_tokens),
+        "--temperature",
+        str(args.temperature),
+        "--output-dir",
+        str(args.output_dir),
+        "--num-shards",
+        str(num_shards),
+        "--shard-index",
+        str(shard_index),
+        "--run-stem",
+        run_stem,
+    ]
+    if args.limit is not None:
+        cmd.extend(["--limit", str(args.limit)])
+    if args.text_only:
+        cmd.append("--text-only")
+    if args.multimodal_only:
+        cmd.append("--multimodal-only")
+    if args.judge:
+        cmd.append("--judge")
+        cmd.extend(["--judge-model", args.judge_model])
+    return cmd
+
+
+def parse_optional_float(value: str) -> Optional[float]:
+    if value in {"", "None", None}:
+        return None
+    return float(value)
+
+
+def parse_bool(value: str) -> bool:
+    return value.lower() in {"1", "true", "yes", "y"}
+
+
+def load_rows_from_csv(path: Path) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    with path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            rows.append(
+                {
+                    "id": row["id"],
+                    "year": int(row["year"]),
+                    "question_length": row["question_length"],
+                    "has_image": parse_bool(row["has_image"]),
+                    "question": row["question"],
+                    "reference_answer": row["reference_answer"],
+                    "prediction": row["prediction"],
+                    "bleu": parse_optional_float(row["bleu"]),
+                    "rouge_l": parse_optional_float(row["rouge_l"]),
+                    "bertscore_f1": parse_optional_float(row["bertscore_f1"]),
+                    "cosine_similarity": parse_optional_float(row["cosine_similarity"]),
+                    "judge_verdict": row["judge_verdict"] or None,
+                    "judge_score": parse_optional_float(row["judge_score"]),
+                    "judge_rationale": row["judge_rationale"] or None,
+                }
+            )
+    return rows
+
+
 def write_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
     fieldnames = [
         "id",
@@ -499,13 +652,84 @@ def print_summary(summary: Dict[str, Any]) -> None:
         print(" ".join(parts))
 
 
+def run_parallel_workers(args: argparse.Namespace, run_stem: str, log_path: Path) -> int:
+    devices = parse_parallel_devices(args.parallel_devices)
+    if not devices:
+        raise ValueError("--parallel-devices was provided but no device ids were parsed.")
+
+    print(f"Launching {len(devices)} workers across devices: {', '.join(devices)}")
+    processes = []
+
+    for shard_index, device in enumerate(devices):
+        cmd = build_worker_command(args, run_stem, len(devices), shard_index)
+        env = os.environ.copy()
+        env["ROCR_VISIBLE_DEVICES"] = device
+        env["HIP_VISIBLE_DEVICES"] = device
+        env["CUDA_VISIBLE_DEVICES"] = device
+        worker_paths = build_output_paths(args.output_dir, run_stem, len(devices), shard_index)
+        print(f"Starting worker {shard_index} on device {device}")
+        print("  Command:", " ".join(cmd))
+        print(f"  Worker log: {worker_paths['log']}")
+        proc = subprocess.Popen(cmd, env=env)
+        processes.append((shard_index, device, proc))
+
+    failures = []
+    for shard_index, device, proc in processes:
+        return_code = proc.wait()
+        if return_code != 0:
+            failures.append((shard_index, device, return_code))
+            print(
+                f"Worker {shard_index} on device {device} failed with exit code {return_code}.",
+                file=sys.stderr,
+            )
+        else:
+            print(f"Worker {shard_index} on device {device} completed successfully.")
+
+    if failures:
+        print("\nParallel run failed. Check the worker logs:", file=sys.stderr)
+        for shard_index, device, return_code in failures:
+            worker_paths = build_output_paths(args.output_dir, run_stem, len(devices), shard_index)
+            print(
+                f"  worker {shard_index} device {device}: exit={return_code} log={worker_paths['log']}",
+                file=sys.stderr,
+            )
+        return 1
+
+    rows: List[Dict[str, Any]] = []
+    for shard_index in range(len(devices)):
+        worker_paths = build_output_paths(args.output_dir, run_stem, len(devices), shard_index)
+        rows.extend(load_rows_from_csv(worker_paths["csv"]))
+
+    rows.sort(key=lambda row: row["id"])
+    summary = summarize(rows)
+    summary["generation_model"] = args.model
+    summary["judge_model"] = args.judge_model if args.judge else None
+    summary["log_file"] = str(log_path)
+    summary["parallel_devices"] = devices
+    summary["num_workers"] = len(devices)
+    summary["worker_logs"] = [
+        str(build_output_paths(args.output_dir, run_stem, len(devices), i)["log"])
+        for i in range(len(devices))
+    ]
+
+    aggregate_paths = build_output_paths(args.output_dir, run_stem, 1, 0)
+    write_csv(aggregate_paths["csv"], rows)
+    aggregate_paths["summary"].write_text(json.dumps(summary, indent=2))
+
+    print_summary(summary)
+    print(f"\nWrote merged per-example results to: {aggregate_paths['csv']}")
+    print(f"Wrote merged summary to: {aggregate_paths['summary']}")
+    print(f"Wrote parent log to: {aggregate_paths['log']}")
+    return 0
+
+
 def main() -> int:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     dataset_root = args.dataset_root.resolve()
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    stem = f"usaaao_gemma_eval_{timestamp}"
-    log_path = args.output_dir / f"{stem}.log"
+    run_stem = make_run_stem(args.run_stem)
+    paths = build_output_paths(args.output_dir, run_stem, args.num_shards, args.shard_index)
+    log_path = paths["log"]
 
     original_stdout = sys.stdout
     original_stderr = sys.stderr
@@ -515,7 +739,15 @@ def main() -> int:
 
     try:
         print(f"Logging to: {log_path}")
+        if args.parallel_devices:
+            if args.num_shards != 1 or args.shard_index != 0:
+                raise ValueError(
+                    "--parallel-devices cannot be combined with explicit shard worker flags."
+                )
+            return run_parallel_workers(args, run_stem, log_path)
+
         examples = filter_examples(load_examples(args.years, dataset_root), args)
+        examples = shard_examples(examples, args.num_shards, args.shard_index)
         if not examples:
             print("No examples matched the requested filters.", file=sys.stderr)
             return 1
@@ -593,9 +825,11 @@ def main() -> int:
         summary["generation_model"] = args.model
         summary["judge_model"] = args.judge_model if args.judge else None
         summary["log_file"] = str(log_path)
+        summary["num_shards"] = args.num_shards
+        summary["shard_index"] = args.shard_index
 
-        csv_path = args.output_dir / f"{stem}.csv"
-        json_path = args.output_dir / f"{stem}_summary.json"
+        csv_path = paths["csv"]
+        json_path = paths["summary"]
 
         write_csv(csv_path, rows)
         json_path.write_text(json.dumps(summary, indent=2))
