@@ -277,12 +277,32 @@ class GemmaGenerator:
                 "Install it with `pip install transformers torch pillow`."
             )
         self.PIL_Image = nested_import("PIL.Image", "open")
-        self.pipe = transformers_pipeline(
-            "image-text-to-text",
-            model=model_name,
-        )
+        self.model_name = model_name
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
+        self.multimodal_capable = False
+
+        # Prefer a multimodal pipeline when the model supports it, but fall back
+        # to a text-generation pipeline for text-only chat models.
+        try:
+            candidate_pipe = transformers_pipeline(
+                "image-text-to-text",
+                model=model_name,
+            )
+            processor = getattr(candidate_pipe, "processor", None)
+            if processor is not None and hasattr(processor, "apply_chat_template"):
+                self.pipe = candidate_pipe
+                self.multimodal_capable = True
+            else:
+                self.pipe = transformers_pipeline(
+                    "text-generation",
+                    model=model_name,
+                )
+        except Exception:
+            self.pipe = transformers_pipeline(
+                "text-generation",
+                model=model_name,
+            )
 
     def generate(self, example: Example) -> str:
         prompt = build_generation_prompt(example)
@@ -292,6 +312,11 @@ class GemmaGenerator:
         }
 
         if example.image_path is not None:
+            if not self.multimodal_capable:
+                raise ValueError(
+                    f"Model `{self.model_name}` is text-only and cannot process image-linked "
+                    "examples. Re-run with `--text-only` or choose a multimodal model."
+                )
             if self.PIL_Image is None:
                 raise ImportError(
                     "Pillow is required for multimodal evaluation. "
@@ -300,12 +325,20 @@ class GemmaGenerator:
             image = self.PIL_Image(example.image_path)
             message["content"].insert(0, {"type": "image", "image": image})
 
-        result = self.pipe(
-            text=[message],
-            max_new_tokens=self.max_new_tokens,
-            do_sample=self.temperature > 0,
-            temperature=self.temperature,
-        )
+        if self.multimodal_capable:
+            result = self.pipe(
+                text=[message],
+                max_new_tokens=self.max_new_tokens,
+                do_sample=self.temperature > 0,
+                temperature=self.temperature,
+            )
+        else:
+            result = self.pipe(
+                [message],
+                max_new_tokens=self.max_new_tokens,
+                do_sample=self.temperature > 0,
+                temperature=self.temperature,
+            )
         return extract_text_from_generation(result).strip()
 
 
