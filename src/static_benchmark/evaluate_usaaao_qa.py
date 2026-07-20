@@ -352,8 +352,13 @@ class GemmaGenerator:
                 temperature=self.temperature,
             )
         else:
+            tokenizer = getattr(self.pipe, "tokenizer", None)
+            has_chat_template = bool(
+                tokenizer is not None and getattr(tokenizer, "chat_template", None)
+            )
+            text_input: Any = [message] if has_chat_template else prompt
             result = self.pipe(
-                [message],
+                text_input,
                 max_new_tokens=self.max_new_tokens,
                 do_sample=self.temperature > 0,
                 temperature=self.temperature,
