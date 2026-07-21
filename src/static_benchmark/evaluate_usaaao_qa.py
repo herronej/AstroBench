@@ -534,7 +534,17 @@ class OpenAIJudge:
 
 
 def metric_average(rows: List[Dict[str, Any]], key: str) -> Optional[float]:
-    values = [row[key] for row in rows if row.get(key) is not None]
+    values = []
+    for row in rows:
+        value = row.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            try:
+                value = float(value)
+            except ValueError:
+                continue
+        values.append(value)
     if not values:
         return None
     return float(statistics.mean(values))
@@ -872,7 +882,13 @@ def main() -> int:
             if judge is not None:
                 judged = judge.judge(example.question, example.reference_answer, prediction)
                 row["judge_verdict"] = judged.get("verdict")
-                row["judge_score"] = judged.get("score")
+                judge_score = judged.get("score")
+                if isinstance(judge_score, str):
+                    try:
+                        judge_score = float(judge_score)
+                    except ValueError:
+                        pass
+                row["judge_score"] = judge_score
                 row["judge_rationale"] = judged.get("rationale")
 
             rows.append(row)
