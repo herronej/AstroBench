@@ -149,6 +149,12 @@ class LargeModelGenerator:
         torch = nested_import("torch", "bfloat16")
         if torch is None:
             raise ImportError("torch is required to run large-model generation.")
+        torch_module = __import__("torch")
+        if not torch_module.cuda.is_available():
+            raise RuntimeError(
+                "GPU execution was requested, but PyTorch could not initialize CUDA/ROCm. "
+                "Check your driver and torch build compatibility."
+            )
 
         dtype_map = {
             "auto": "auto",
@@ -169,8 +175,19 @@ class LargeModelGenerator:
             model_kwargs["attn_implementation"] = attn_implementation
 
         self.model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+        self.primary_device = self._resolve_primary_device()
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
+
+    def _resolve_primary_device(self):
+        hf_device_map = getattr(self.model, "hf_device_map", None)
+        if isinstance(hf_device_map, dict):
+            for device in hf_device_map.values():
+                if isinstance(device, str) and device not in {"cpu", "disk"}:
+                    return device
+                if isinstance(device, int):
+                    return f"cuda:{device}"
+        return getattr(self.model, "device", None)
 
     def generate(self, question_prompt: str) -> str:
         has_chat_template = bool(getattr(self.tokenizer, "chat_template", None))
@@ -188,9 +205,8 @@ class LargeModelGenerator:
             )["input_ids"]
 
         if hasattr(model_inputs, "to"):
-            first_device = getattr(self.model, "device", None)
-            if first_device is not None:
-                model_inputs = model_inputs.to(first_device)
+            if self.primary_device is not None:
+                model_inputs = model_inputs.to(self.primary_device)
 
         attention_mask = None
         if hasattr(model_inputs, "ne") and self.tokenizer.pad_token_id is not None:

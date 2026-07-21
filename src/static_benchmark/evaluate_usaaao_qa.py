@@ -43,6 +43,18 @@ def nested_import(module_name: str, attr_name: str):
         return None
 
 
+def resolve_pipeline_device_index(require_gpu: bool = True) -> int:
+    torch = __import__("torch")
+    if torch.cuda.is_available():
+        return 0
+    if require_gpu:
+        raise RuntimeError(
+            "GPU execution was requested, but PyTorch could not initialize CUDA/ROCm. "
+            "Check your driver and torch build compatibility."
+        )
+    return -1
+
+
 @dataclass
 class Example:
     record_id: str
@@ -300,6 +312,7 @@ class GemmaGenerator:
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.multimodal_capable = False
+        self.pipeline_device = resolve_pipeline_device_index(require_gpu=True)
 
         # Prefer a multimodal pipeline when the model supports it, but fall back
         # to a text-generation pipeline for text-only chat models.
@@ -307,6 +320,7 @@ class GemmaGenerator:
             candidate_pipe = transformers_pipeline(
                 "image-text-to-text",
                 model=model_name,
+                device=self.pipeline_device,
             )
             processor = getattr(candidate_pipe, "processor", None)
             if processor is not None and hasattr(processor, "apply_chat_template"):
@@ -316,11 +330,13 @@ class GemmaGenerator:
                 self.pipe = transformers_pipeline(
                     "text-generation",
                     model=model_name,
+                    device=self.pipeline_device,
                 )
         except Exception:
             self.pipe = transformers_pipeline(
                 "text-generation",
                 model=model_name,
+                device=self.pipeline_device,
             )
 
     def generate(self, example: Example) -> str:
