@@ -13,6 +13,7 @@ src/static_benchmark/benchmark_results/
 # Scratch / generated local benchmark artifacts
 src/static_benchmark/qa_pairs.json
 src/static_benchmark/sol.pdf
+src/static_benchmark/workshop_papers/
 
 # Local database and export artifacts
 *.db

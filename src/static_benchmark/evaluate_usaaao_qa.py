@@ -155,6 +155,24 @@ def build_output_paths(
     }
 
 
+CSV_FIELDNAMES = [
+    "id",
+    "year",
+    "question_length",
+    "has_image",
+    "question",
+    "reference_answer",
+    "prediction",
+    "bleu",
+    "rouge_l",
+    "bertscore_f1",
+    "cosine_similarity",
+    "judge_verdict",
+    "judge_score",
+    "judge_rationale",
+]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -243,6 +261,11 @@ def parse_args() -> argparse.Namespace:
         "--run-stem",
         default=None,
         help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from an existing CSV for the same run stem instead of starting over.",
     )
     return parser.parse_args()
 
@@ -650,6 +673,8 @@ def build_worker_command(
     if args.judge:
         cmd.append("--judge")
         cmd.extend(["--judge-model", args.judge_model])
+    if args.resume:
+        cmd.append("--resume")
     return cmd
 
 
@@ -689,28 +714,22 @@ def load_rows_from_csv(path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
+def append_csv_row(path: Path, row: Dict[str, Any]) -> None:
+    write_header = not path.exists() or path.stat().st_size == 0
+    with path.open("a", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CSV_FIELDNAMES)
+        if write_header:
+            writer.writeheader()
+        writer.writerow({key: row.get(key) for key in CSV_FIELDNAMES})
+        handle.flush()
+
+
 def write_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
-    fieldnames = [
-        "id",
-        "year",
-        "question_length",
-        "has_image",
-        "question",
-        "reference_answer",
-        "prediction",
-        "bleu",
-        "rouge_l",
-        "bertscore_f1",
-        "cosine_similarity",
-        "judge_verdict",
-        "judge_score",
-        "judge_rationale",
-    ]
     with path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=CSV_FIELDNAMES)
         writer.writeheader()
         for row in rows:
-            writer.writerow({key: row.get(key) for key in fieldnames})
+            writer.writerow({key: row.get(key) for key in CSV_FIELDNAMES})
 
 
 def print_summary(summary: Dict[str, Any]) -> None:
@@ -862,9 +881,21 @@ def main() -> int:
         if args.judge:
             judge = OpenAIJudge(args.judge_model)
 
+        csv_path = paths["csv"]
+        json_path = paths["summary"]
+
         rows: List[Dict[str, Any]] = []
+        completed_ids = set()
+        if args.resume and csv_path.exists():
+            rows = load_rows_from_csv(csv_path)
+            completed_ids = {row["id"] for row in rows}
+            print(f"Resume enabled: loaded {len(rows)} completed rows from {csv_path}")
+
         start = time.time()
         for index, example in enumerate(examples, start=1):
+            if example.record_id in completed_ids:
+                print(f"[{index}/{len(examples)}] {example.record_id} (already completed, skipping)")
+                continue
             print(f"[{index}/{len(examples)}] {example.record_id}")
             prediction = generator.generate(example)
 
@@ -908,6 +939,8 @@ def main() -> int:
                 row["judge_rationale"] = judged.get("rationale")
 
             rows.append(row)
+            append_csv_row(csv_path, row)
+            completed_ids.add(example.record_id)
 
         summary = summarize(rows)
         summary["elapsed_seconds"] = round(time.time() - start, 2)
@@ -916,9 +949,6 @@ def main() -> int:
         summary["log_file"] = str(log_path)
         summary["num_shards"] = args.num_shards
         summary["shard_index"] = args.shard_index
-
-        csv_path = paths["csv"]
-        json_path = paths["summary"]
 
         write_csv(csv_path, rows)
         json_path.write_text(json.dumps(summary, indent=2))

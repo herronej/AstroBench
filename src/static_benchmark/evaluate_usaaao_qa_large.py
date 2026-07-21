@@ -28,17 +28,20 @@ from typing import Any, Dict, List, Optional
 import config
 from evaluate_usaaao_qa import (
     BERTScoreScorer,
+    CSV_FIELDNAMES,
     CosineScorer,
     DEFAULT_DATASET_ROOT,
     OUTPUT_DIR,
     OpenAIJudge,
     TeeStream,
+    append_csv_row,
     build_generation_prompt,
     build_output_paths,
     compute_bleu,
     compute_rouge_l,
     filter_examples,
     load_examples,
+    load_rows_from_csv,
     make_run_stem,
     summarize,
     write_csv,
@@ -126,6 +129,11 @@ def parse_args() -> argparse.Namespace:
         "--run-stem",
         default=None,
         help="Optional custom output stem.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from an existing CSV for the same run stem instead of starting over.",
     )
     return parser.parse_args()
 
@@ -290,9 +298,21 @@ def main() -> int:
         if args.judge:
             judge = OpenAIJudge(args.judge_model)
 
+        csv_path = paths["csv"]
+        json_path = paths["summary"]
+
         rows: List[Dict[str, Any]] = []
+        completed_ids = set()
+        if args.resume and csv_path.exists():
+            rows = load_rows_from_csv(csv_path)
+            completed_ids = {row["id"] for row in rows}
+            print(f"Resume enabled: loaded {len(rows)} completed rows from {csv_path}")
+
         start = time.time()
         for index, example in enumerate(examples, start=1):
+            if example.record_id in completed_ids:
+                print(f"[{index}/{len(examples)}] {example.record_id} (already completed, skipping)")
+                continue
             print(f"[{index}/{len(examples)}] {example.record_id}")
             prediction = generator.generate(build_generation_prompt(example))
 
@@ -336,6 +356,8 @@ def main() -> int:
                 row["judge_rationale"] = judged.get("rationale")
 
             rows.append(row)
+            append_csv_row(csv_path, row)
+            completed_ids.add(example.record_id)
 
         summary = summarize(rows)
         summary["elapsed_seconds"] = round(time.time() - start, 2)
@@ -343,8 +365,6 @@ def main() -> int:
         summary["judge_model"] = args.judge_model if args.judge else None
         summary["log_file"] = str(log_path)
 
-        csv_path = paths["csv"]
-        json_path = paths["summary"]
         write_csv(csv_path, rows)
         json_path.write_text(json.dumps(summary, indent=2))
 
