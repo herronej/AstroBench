@@ -79,6 +79,11 @@ def parse_args() -> argparse.Namespace:
         help="Skip any rows with linked images. Recommended for large text-only models.",
     )
     parser.add_argument(
+        "--multimodal-only",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--judge",
         action="store_true",
         help="Enable OpenAI LLM-as-judge scoring.",
