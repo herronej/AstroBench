@@ -86,6 +86,11 @@ class TeeStream:
         for stream in self.streams:
             stream.flush()
 
+    def isatty(self) -> bool:
+        if self._closed:
+            return False
+        return any(getattr(stream, "isatty", lambda: False)() for stream in self.streams)
+
     def close(self) -> None:
         if self._closed:
             return
