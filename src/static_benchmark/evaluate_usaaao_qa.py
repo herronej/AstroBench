@@ -373,6 +373,13 @@ class GemmaGenerator:
             "role": "user",
             "content": [{"type": "text", "text": prompt}],
         }
+        generate_kwargs = {
+            "max_new_tokens": self.max_new_tokens,
+            "max_length": None,
+            "do_sample": self.temperature > 0,
+        }
+        if self.temperature > 0:
+            generate_kwargs["temperature"] = self.temperature
 
         if example.image_path is not None:
             if not self.multimodal_capable:
@@ -390,10 +397,9 @@ class GemmaGenerator:
 
         if self.multimodal_capable:
             result = self.pipe(
-                text=[message],
-                max_new_tokens=self.max_new_tokens,
-                do_sample=self.temperature > 0,
-                temperature=self.temperature,
+                [message],
+                generate_kwargs=generate_kwargs,
+                processor_kwargs={},
             )
         else:
             tokenizer = getattr(self.pipe, "tokenizer", None)
@@ -401,12 +407,7 @@ class GemmaGenerator:
                 tokenizer is not None and getattr(tokenizer, "chat_template", None)
             )
             text_input: Any = [message] if has_chat_template else prompt
-            result = self.pipe(
-                text_input,
-                max_new_tokens=self.max_new_tokens,
-                do_sample=self.temperature > 0,
-                temperature=self.temperature,
-            )
+            result = self.pipe(text_input, **generate_kwargs)
         return extract_text_from_generation(result).strip()
 
 
