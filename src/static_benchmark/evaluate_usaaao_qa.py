@@ -369,9 +369,13 @@ class GemmaGenerator:
 
     def generate(self, example: Example) -> str:
         prompt = build_generation_prompt(example)
-        message: Dict[str, Any] = {
+        multimodal_message: Dict[str, Any] = {
             "role": "user",
             "content": [{"type": "text", "text": prompt}],
+        }
+        text_chat_message: Dict[str, Any] = {
+            "role": "user",
+            "content": prompt,
         }
         generate_kwargs = {
             "max_new_tokens": self.max_new_tokens,
@@ -393,11 +397,11 @@ class GemmaGenerator:
                     "Install it with `pip install pillow`."
                 )
             image = self.PIL_Image(example.image_path)
-            message["content"].insert(0, {"type": "image", "image": image})
+            multimodal_message["content"].insert(0, {"type": "image", "image": image})
 
         if self.multimodal_capable:
             result = self.pipe(
-                [message],
+                [multimodal_message],
                 generate_kwargs=generate_kwargs,
                 processor_kwargs={},
             )
@@ -406,7 +410,7 @@ class GemmaGenerator:
             has_chat_template = bool(
                 tokenizer is not None and getattr(tokenizer, "chat_template", None)
             )
-            text_input: Any = [message] if has_chat_template else prompt
+            text_input: Any = [text_chat_message] if has_chat_template else prompt
             result = self.pipe(text_input, **generate_kwargs)
         return extract_text_from_generation(result).strip()
 
