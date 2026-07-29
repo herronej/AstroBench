@@ -213,7 +213,7 @@ class LargeModelGenerator:
             )
         else:
             model_inputs = self.tokenizer(
-                question_prompt,
+                f"{question_prompt}\n\nAnswer:\n",
                 return_tensors="pt",
             )["input_ids"]
 
@@ -240,7 +240,16 @@ class LargeModelGenerator:
 
         outputs = self.model.generate(**generate_kwargs)
         generated_ids = outputs[0][model_inputs.shape[-1] :]
-        return self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+        prediction = self.tokenizer.decode(
+            generated_ids, skip_special_tokens=True
+        ).strip()
+        if not prediction:
+            raise RuntimeError(
+                "The generation model returned an empty answer. This commonly happens "
+                "when a base (non-instruction-tuned) model receives a chat-style prompt. "
+                "No metrics were saved for this example."
+            )
+        return prediction
 
 
 def main() -> int:
