@@ -38,8 +38,8 @@ exec > >(tee -a "$MASTER_LOG") 2>&1
 
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
 
-if [[ ! -d "$DATASET_ROOT/images" || ! -f "$DATASET_ROOT/2020.jsonl" && ! -f "$DATASET_ROOT/data/2020.jsonl" ]]; then
-  log "ERROR: expected dataset root with year JSONL files and images/: $DATASET_ROOT"
+if [[ ! -d "$DATASET_ROOT/images" || ! -f "$DATASET_ROOT/2020.jsonl" ]]; then
+  log "ERROR: expected dataset root with root-level year JSONL files and images/: $DATASET_ROOT"
   exit 1
 fi
 
