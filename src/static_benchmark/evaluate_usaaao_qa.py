@@ -277,7 +277,11 @@ def parse_args() -> argparse.Namespace:
 
 def load_examples(years: Iterable[int], dataset_root: Path) -> List[Example]:
     examples: List[Example] = []
+    # Support both the original local layout (year files at the dataset root)
+    # and the Hugging Face layout (data/<year>.jsonl).
     data_dir = dataset_root / "data"
+    if not data_dir.is_dir():
+        data_dir = dataset_root
     for year in years:
         path = data_dir / f"{year}.jsonl"
         if not path.exists():

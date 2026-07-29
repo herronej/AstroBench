@@ -26,7 +26,7 @@ if [[ -z "${GPU_IDS:-}" ]]; then
 fi
 GPU_IDS="$GPU_IDS"
 IFS=',' read -r GPU_A GPU_B GPU_C <<< "$GPU_IDS"
-DATASET_ROOT="${DATASET_ROOT:-$ROOT_DIR/src/static_benchmark/USAAAO_QA}"
+DATASET_ROOT="${DATASET_ROOT:-$ROOT_DIR/src/static_benchmark/usaaao_qa_local}"
 YEARS=(2020 2021 2022 2023 2024 2025 2026)
 JUDGE_MODEL="${JUDGE_MODEL:-gpt-5}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -38,8 +38,8 @@ exec > >(tee -a "$MASTER_LOG") 2>&1
 
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
 
-if [[ ! -d "$DATASET_ROOT/data" || ! -d "$DATASET_ROOT/images" ]]; then
-  log "ERROR: expected dataset root with data/ and images/: $DATASET_ROOT"
+if [[ ! -d "$DATASET_ROOT/images" || ! -f "$DATASET_ROOT/2020.jsonl" && ! -f "$DATASET_ROOT/data/2020.jsonl" ]]; then
+  log "ERROR: expected dataset root with year JSONL files and images/: $DATASET_ROOT"
   exit 1
 fi
 
