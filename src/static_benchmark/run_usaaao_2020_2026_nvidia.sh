@@ -104,9 +104,12 @@ run_large() {
   } > >(tee -a "$log_file") 2>&1
 }
 
-log "Starting multimodal models sequentially (one GPU each)."
-run_standard gemma-3-4b-it google/gemma-3-4b-it "$GPU_A" multimodal || true
-run_standard gemma-4-26b-a4b google/gemma-4-26B-A4B-it "$GPU_A" multimodal || true
+log "Starting multimodal models with available one-GPU slots."
+run_standard gemma-3-4b-it google/gemma-3-4b-it "$GPU_A" multimodal &
+pid1=$!
+run_standard gemma-4-26b-a4b google/gemma-4-26B-A4B-it "$GPU_B" multimodal &
+pid2=$!
+wait "$pid1" "$pid2" || true
 run_standard gemma-4-31b google/gemma-4-31B-it "$GPU_A" multimodal || true
 
 log "Starting small text-only models two at a time."
@@ -126,7 +129,7 @@ run_standard gpt-oss-20b openai/gpt-oss-20b "$GPU_B" text-only &
 pid2=$!
 wait "$pid1" "$pid2" || true
 
-log "Starting 70B models with all three GPUs (exclusive)."
+log "Starting 70B models with all requested GPUs (exclusive)."
 run_large llama-3.1-70b-instruct meta-llama/Meta-Llama-3.1-70B-Instruct || true
 run_large astrosage-70b-20251009 AstroMLab/AstroSage-70B-20251009 || true
 
