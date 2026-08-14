@@ -38,7 +38,7 @@ export JUDGE_OPENAI_USE_AZURE=false
 IN_2017_2019="src/static_benchmark/benchmark_results/usaaao_astrosage-70b-20251009_eval_20260721-134945.csv"
 IN_2020_2026="src/static_benchmark/benchmark_results/usaaao_2020_2026/astrosage-70b-20251009/usaaao_2020_2026_astrosage-70b-20251009.csv"
 
-OUT_BASE="src/static_benchmark/benchmark_results/judge_sensitivity_claude"
+OUT_BASE="${JUDGE_SENSITIVITY_OUT_BASE:-src/static_benchmark/benchmark_results/judge_sensitivity_claude_jsonfix}"
 OUT_2017_2019="$OUT_BASE/astrosage-70b-20251009_2017_2019"
 OUT_2020_2026="$OUT_BASE/astrosage-70b-20251009_2020_2026"
 OUT_ALL="$OUT_BASE/astrosage-70b-20251009_2017_2026"
@@ -77,7 +77,9 @@ import json
 from pathlib import Path
 from statistics import mean
 
-out_base = Path("src/static_benchmark/benchmark_results/judge_sensitivity_claude")
+import os
+
+out_base = Path(os.environ.get("JUDGE_SENSITIVITY_OUT_BASE", "src/static_benchmark/benchmark_results/judge_sensitivity_claude_jsonfix"))
 parts = [
     out_base / "astrosage-70b-20251009_2017_2019" / "usaaao_2017_2019_astrosage-70b-20251009_judged_by_claude-sonnet-4-6.csv",
     out_base / "astrosage-70b-20251009_2020_2026" / "usaaao_2020_2026_astrosage-70b-20251009_judged_by_claude-sonnet-4-6.csv",

@@ -69,7 +69,7 @@ IN_2020_2026="$(first_existing \
   "src/static_benchmark/benchmark_results/usaaao_2020_2026/gpt-oss-20b/usaaao_2020_2026_gpt-oss-20b.csv" \
   || true)"
 
-OUT_BASE="src/static_benchmark/benchmark_results/judge_sensitivity_claude"
+OUT_BASE="${JUDGE_SENSITIVITY_OUT_BASE:-src/static_benchmark/benchmark_results/judge_sensitivity_claude_jsonfix}"
 OUT_ALL="$OUT_BASE/gpt-oss-20b_2017_2026"
 OUT_2017_2019="$OUT_BASE/gpt-oss-20b_2017_2019"
 OUT_2020_2026="$OUT_BASE/gpt-oss-20b_2020_2026"
@@ -127,7 +127,9 @@ import json
 from pathlib import Path
 from statistics import mean
 
-out_base = Path("src/static_benchmark/benchmark_results/judge_sensitivity_claude")
+import os
+
+out_base = Path(os.environ.get("JUDGE_SENSITIVITY_OUT_BASE", "src/static_benchmark/benchmark_results/judge_sensitivity_claude_jsonfix"))
 parts = [
     out_base / "gpt-oss-20b_2017_2019" / "usaaao_2017_2019_gpt-oss-20b_judged_by_claude-sonnet-4-6.csv",
     out_base / "gpt-oss-20b_2020_2026" / "usaaao_2020_2026_gpt-oss-20b_judged_by_claude-sonnet-4-6.csv",

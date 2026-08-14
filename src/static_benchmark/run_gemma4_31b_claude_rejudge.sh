@@ -38,7 +38,7 @@ export JUDGE_OPENAI_USE_AZURE=false
 IN_2017_2019="src/static_benchmark/benchmark_results/usaaao_gemma-4-31b_eval.csv"
 IN_2020_2026="src/static_benchmark/benchmark_results/usaaao_2020_2026/gemma-4-31b/usaaao_2020_2026_gemma-4-31b.csv"
 
-OUT_BASE="src/static_benchmark/benchmark_results/judge_sensitivity_claude"
+OUT_BASE="${JUDGE_SENSITIVITY_OUT_BASE:-src/static_benchmark/benchmark_results/judge_sensitivity_claude_jsonfix}"
 OUT_2017_2019="$OUT_BASE/gemma-4-31b_2017_2019"
 OUT_2020_2026="$OUT_BASE/gemma-4-31b_2020_2026"
 
@@ -76,7 +76,9 @@ import json
 from pathlib import Path
 from statistics import mean
 
-out_base = Path("src/static_benchmark/benchmark_results/judge_sensitivity_claude")
+import os
+
+out_base = Path(os.environ.get("JUDGE_SENSITIVITY_OUT_BASE", "src/static_benchmark/benchmark_results/judge_sensitivity_claude_jsonfix"))
 parts = [
     out_base / "gemma-4-31b_2017_2019" / "usaaao_2017_2019_gemma-4-31b_judged_by_claude-sonnet-4-6.csv",
     out_base / "gemma-4-31b_2020_2026" / "usaaao_2020_2026_gemma-4-31b_judged_by_claude-sonnet-4-6.csv",

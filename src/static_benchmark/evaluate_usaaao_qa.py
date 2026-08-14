@@ -500,18 +500,34 @@ class OpenAIJudge:
         self.model_name = model_name
 
     def _build_client(self):
-        api_key = os.getenv("OPENAI_API_KEY") or config.OPENAI_API_KEY
-        base_url = os.getenv("OPENAI_BASE_URL") or config.OPENAI_BASE_URL
+        api_key = (
+            os.getenv("JUDGE_OPENAI_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or config.OPENAI_API_KEY
+        )
+        base_url = (
+            os.getenv("JUDGE_OPENAI_BASE_URL")
+            or os.getenv("OPENAI_BASE_URL")
+            or config.OPENAI_BASE_URL
+        )
         azure_endpoint = (
-            os.getenv("AZURE_OPENAI_ENDPOINT")
+            os.getenv("JUDGE_AZURE_OPENAI_ENDPOINT")
+            or os.getenv("JUDGE_OPENAI_AZURE_ENDPOINT")
+            or os.getenv("AZURE_OPENAI_ENDPOINT")
             or os.getenv("OPENAI_AZURE_ENDPOINT")
             or config.OPENAI_AZURE_ENDPOINT
         )
-        api_version = os.getenv("OPENAI_API_VERSION") or config.OPENAI_API_VERSION
-        use_azure_env = os.getenv("OPENAI_USE_AZURE")
+        api_version = (
+            os.getenv("JUDGE_OPENAI_API_VERSION")
+            or os.getenv("OPENAI_API_VERSION")
+            or config.OPENAI_API_VERSION
+        )
+        use_azure_env = os.getenv("JUDGE_OPENAI_USE_AZURE")
+        if use_azure_env is None:
+            use_azure_env = os.getenv("OPENAI_USE_AZURE")
         use_azure = config.OPENAI_USE_AZURE
         if use_azure_env is not None:
-            use_azure = use_azure_env.lower() in {"1", "true", "yes", "on"}
+            use_azure = use_azure_env.strip().lower() in {"1", "true", "yes", "on"}
 
         if not api_key:
             raise ValueError(
@@ -552,6 +568,26 @@ class OpenAIJudge:
             kwargs["base_url"] = base_url
         return openai_client(**kwargs)
 
+    @staticmethod
+    def _parse_json_payload(payload: str) -> Dict[str, Any]:
+        text = payload.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines and lines[0].strip().startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            start = text.find("{")
+            end = text.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                return json.loads(text[start : end + 1])
+            raise
+
     def judge(self, question: str, reference_answer: str, model_answer: str) -> Dict[str, Any]:
         prompt = (
             "You are grading an astronomy benchmark answer.\n"
@@ -566,14 +602,44 @@ class OpenAIJudge:
             f"Model answer:\n{model_answer}"
         )
 
-        response = self.client.responses.create(
-            model=self.model_name,
-            input=prompt,
-            text={"format": {"type": "json_object"}},
-        )
+        response = None
+        last_exc: Optional[Exception] = None
+        for attempt in range(5):
+            try:
+                response = self.client.responses.create(
+                    model=self.model_name,
+                    input=prompt,
+                    text={"format": {"type": "json_object"}},
+                )
+                break
+            except Exception as exc:
+                last_exc = exc
+                exc_name = exc.__class__.__name__.lower()
+                exc_text = str(exc).lower()
+                is_transient = any(
+                    marker in exc_name or marker in exc_text
+                    for marker in (
+                        "timeout",
+                        "timed out",
+                        "connection",
+                        "rate limit",
+                        "server",
+                        "temporarily",
+                    )
+                )
+                if not is_transient or attempt == 4:
+                    raise
+                wait = min(5 * (2**attempt), 60)
+                print(
+                    f"Judge request failed transiently ({exc.__class__.__name__}); "
+                    f"retrying in {wait}s ({attempt + 1}/5)."
+                )
+                time.sleep(wait)
+        if response is None:
+            raise RuntimeError("Judge request failed without a response.") from last_exc
         payload = response.output_text
         try:
-            return json.loads(payload)
+            return self._parse_json_payload(payload)
         except json.JSONDecodeError:
             return {
                 "verdict": "incorrect",
