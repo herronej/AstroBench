@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Rejudge existing AstroSage 70B predictions with a Claude/i2 judge.
-# This is a judge-only run: it does not load the 70B model and does not use GPUs.
+# Rejudge existing Gemma 4 31B predictions with a Claude/i2 judge.
+# This is a judge-only run: it does not load the model and does not use GPUs.
 #
 # Required environment:
 #   export AMSC_I2_API_KEY="..."
@@ -35,13 +35,12 @@ export JUDGE_OPENAI_BASE_URL
 export OPENAI_BASE_URL="$JUDGE_OPENAI_BASE_URL"
 export JUDGE_OPENAI_USE_AZURE=false
 
-IN_2017_2019="src/static_benchmark/benchmark_results/usaaao_astrosage-70b-20251009_eval_20260721-134945.csv"
-IN_2020_2026="src/static_benchmark/benchmark_results/usaaao_2020_2026/astrosage-70b-20251009/usaaao_2020_2026_astrosage-70b-20251009.csv"
+IN_2017_2019="src/static_benchmark/benchmark_results/usaaao_gemma-4-31b_eval.csv"
+IN_2020_2026="src/static_benchmark/benchmark_results/usaaao_2020_2026/gemma-4-31b/usaaao_2020_2026_gemma-4-31b.csv"
 
 OUT_BASE="src/static_benchmark/benchmark_results/judge_sensitivity_claude"
-OUT_2017_2019="$OUT_BASE/astrosage-70b-20251009_2017_2019"
-OUT_2020_2026="$OUT_BASE/astrosage-70b-20251009_2020_2026"
-OUT_ALL="$OUT_BASE/astrosage-70b-20251009_2017_2026"
+OUT_2017_2019="$OUT_BASE/gemma-4-31b_2017_2019"
+OUT_2020_2026="$OUT_BASE/gemma-4-31b_2020_2026"
 
 for input_csv in "$IN_2017_2019" "$IN_2020_2026"; do
   if [[ ! -f "$input_csv" ]]; then
@@ -52,21 +51,21 @@ done
 
 echo "Judge model: $SECOND_JUDGE_MODEL"
 echo "Judge base URL: $JUDGE_OPENAI_BASE_URL"
-echo "Running 2017--2019 AstroSage 70B Claude rejudge..."
+echo "Running 2017--2019 Gemma 4 31B Claude rejudge..."
 python3 src/static_benchmark/rejudge_usaaao_csv.py \
   --input-csv "$IN_2017_2019" \
   --output-dir "$OUT_2017_2019" \
   --judge-model "$SECOND_JUDGE_MODEL" \
-  --run-stem "usaaao_2017_2019_astrosage-70b-20251009_judged_by_claude-sonnet-4-6" \
+  --run-stem "usaaao_2017_2019_gemma-4-31b_judged_by_claude-sonnet-4-6" \
   --text-only \
   --resume
 
-echo "Running 2020--2026 AstroSage 70B Claude rejudge..."
+echo "Running 2020--2026 Gemma 4 31B Claude rejudge..."
 python3 src/static_benchmark/rejudge_usaaao_csv.py \
   --input-csv "$IN_2020_2026" \
   --output-dir "$OUT_2020_2026" \
   --judge-model "$SECOND_JUDGE_MODEL" \
-  --run-stem "usaaao_2020_2026_astrosage-70b-20251009_judged_by_claude-sonnet-4-6" \
+  --run-stem "usaaao_2020_2026_gemma-4-31b_judged_by_claude-sonnet-4-6" \
   --text-only \
   --resume
 
@@ -79,13 +78,13 @@ from statistics import mean
 
 out_base = Path("src/static_benchmark/benchmark_results/judge_sensitivity_claude")
 parts = [
-    out_base / "astrosage-70b-20251009_2017_2019" / "usaaao_2017_2019_astrosage-70b-20251009_judged_by_claude-sonnet-4-6.csv",
-    out_base / "astrosage-70b-20251009_2020_2026" / "usaaao_2020_2026_astrosage-70b-20251009_judged_by_claude-sonnet-4-6.csv",
+    out_base / "gemma-4-31b_2017_2019" / "usaaao_2017_2019_gemma-4-31b_judged_by_claude-sonnet-4-6.csv",
+    out_base / "gemma-4-31b_2020_2026" / "usaaao_2020_2026_gemma-4-31b_judged_by_claude-sonnet-4-6.csv",
 ]
-out_dir = out_base / "astrosage-70b-20251009_2017_2026"
+out_dir = out_base / "gemma-4-31b_2017_2026"
 out_dir.mkdir(parents=True, exist_ok=True)
-out_csv = out_dir / "usaaao_2017_2026_astrosage-70b-20251009_judged_by_claude-sonnet-4-6.csv"
-out_json = out_dir / "usaaao_2017_2026_astrosage-70b-20251009_judged_by_claude-sonnet-4-6_summary.json"
+out_csv = out_dir / "usaaao_2017_2026_gemma-4-31b_judged_by_claude-sonnet-4-6.csv"
+out_json = out_dir / "usaaao_2017_2026_gemma-4-31b_judged_by_claude-sonnet-4-6_summary.json"
 
 rows = []
 fieldnames = None
@@ -112,7 +111,7 @@ for row in rows:
         pass
 
 summary = {
-    "model_slug": "astrosage-70b-20251009",
+    "model_slug": "gemma-4-31b",
     "judge_model": rows[0].get("judge_model") if rows else None,
     "num_examples": len(rows),
     "judge_score": mean(scores) if scores else None,
