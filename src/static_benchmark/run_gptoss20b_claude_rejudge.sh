@@ -9,6 +9,9 @@ set -euo pipefail
 # Optional overrides:
 #   export SECOND_JUDGE_MODEL="claude-sonnet-4-6"
 #   export JUDGE_OPENAI_BASE_URL="https://api.i2-core.american-science-cloud.org/v1"
+#   export GPTOSS20B_MERGED_CSV="path/to/merged.csv"
+#   export GPTOSS20B_2017_2019_CSV="path/to/2017_2019.csv"
+#   export GPTOSS20B_2020_2026_CSV="path/to/2020_2026.csv"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -35,9 +38,36 @@ export JUDGE_OPENAI_BASE_URL
 export OPENAI_BASE_URL="$JUDGE_OPENAI_BASE_URL"
 export JUDGE_OPENAI_USE_AZURE=false
 
-MERGED_IN="src/static_benchmark/benchmark_results/usaaao_2017_2026_merged/models/gpt-oss-20b/usaaao_2017_2026_gpt-oss-20b.csv"
-IN_2017_2019="src/static_benchmark/benchmark_results/2017-2019benchmark_results/usaaao_gpt-oss-20b_eval.csv"
-IN_2020_2026="src/static_benchmark/benchmark_results/usaaao_2020_2026/gpt-oss-20b/usaaao_2020_2026_gpt-oss-20b.csv"
+first_existing() {
+  local candidate
+  for candidate in "$@"; do
+    if [[ -n "$candidate" && -f "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+MERGED_IN="$(first_existing \
+  "${GPTOSS20B_MERGED_CSV:-}" \
+  "src/static_benchmark/benchmark_results/usaaao_2017_2026_merged/models/gpt-oss-20b/usaaao_2017_2026_gpt-oss-20b.csv" \
+  "src/static_benchmark/benchmark_results/usaaao_2017_2026/gpt-oss-20b/usaaao_2017_2026_gpt-oss-20b.csv" \
+  "src/static_benchmark/benchmark_results/gpt-oss-20b/usaaao_2017_2026_gpt-oss-20b.csv" \
+  || true)"
+
+IN_2017_2019="$(first_existing \
+  "${GPTOSS20B_2017_2019_CSV:-}" \
+  "src/static_benchmark/benchmark_results/usaaao_gpt-oss-20b_eval.csv" \
+  "src/static_benchmark/benchmark_results/2017-2019benchmark_results/usaaao_gpt-oss-20b_eval.csv" \
+  "src/static_benchmark/benchmark_results/usaaao_2017_2019/gpt-oss-20b/usaaao_2017_2019_gpt-oss-20b.csv" \
+  "src/static_benchmark/benchmark_results/usaaao_2017_2019/gpt-oss-20b/usaaao_gpt-oss-20b_eval.csv" \
+  || true)"
+
+IN_2020_2026="$(first_existing \
+  "${GPTOSS20B_2020_2026_CSV:-}" \
+  "src/static_benchmark/benchmark_results/usaaao_2020_2026/gpt-oss-20b/usaaao_2020_2026_gpt-oss-20b.csv" \
+  || true)"
 
 OUT_BASE="src/static_benchmark/benchmark_results/judge_sensitivity_claude"
 OUT_ALL="$OUT_BASE/gpt-oss-20b_2017_2026"
@@ -47,7 +77,7 @@ OUT_2020_2026="$OUT_BASE/gpt-oss-20b_2020_2026"
 echo "Judge model: $SECOND_JUDGE_MODEL"
 echo "Judge base URL: $JUDGE_OPENAI_BASE_URL"
 
-if [[ -f "$MERGED_IN" ]]; then
+if [[ -n "$MERGED_IN" && -f "$MERGED_IN" ]]; then
   echo "Found merged 2017--2026 GPT-OSS 20B CSV."
   echo "Input CSV: $MERGED_IN"
   python3 src/static_benchmark/rejudge_usaaao_csv.py \
@@ -61,13 +91,16 @@ if [[ -f "$MERGED_IN" ]]; then
   exit 0
 fi
 
-for input_csv in "$IN_2017_2019" "$IN_2020_2026"; do
-  if [[ ! -f "$input_csv" ]]; then
-    echo "ERROR: Missing input CSV: $input_csv" >&2
-    echo "Also did not find merged CSV: $MERGED_IN" >&2
-    exit 1
-  fi
-done
+if [[ -z "$IN_2017_2019" || -z "$IN_2020_2026" ]]; then
+  echo "ERROR: Could not locate the GPT-OSS 20B input CSVs." >&2
+  echo "Look for them on this machine with:" >&2
+  echo "  find src/static_benchmark/benchmark_results -name '*gpt*oss*20b*.csv' -o -name '*gpt-oss-20b*.csv' | sort" >&2
+  echo "Then rerun with explicit paths, for example:" >&2
+  echo "  export GPTOSS20B_2017_2019_CSV='path/to/2017_2019.csv'" >&2
+  echo "  export GPTOSS20B_2020_2026_CSV='path/to/2020_2026.csv'" >&2
+  echo "  bash src/static_benchmark/run_gptoss20b_claude_rejudge.sh" >&2
+  exit 1
+fi
 
 echo "Running 2017--2019 GPT-OSS 20B Claude rejudge..."
 python3 src/static_benchmark/rejudge_usaaao_csv.py \
