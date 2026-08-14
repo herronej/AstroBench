@@ -17,13 +17,18 @@ cd "$REPO_ROOT"
 SECOND_JUDGE_MODEL="${SECOND_JUDGE_MODEL:-claude-sonnet-4-6}"
 JUDGE_OPENAI_BASE_URL="${JUDGE_OPENAI_BASE_URL:-https://api.i2-core.american-science-cloud.org/v1}"
 
-if [[ -z "${JUDGE_OPENAI_API_KEY:-}" ]]; then
-  if [[ -z "${AMSC_I2_API_KEY:-}" ]]; then
-    echo "ERROR: Set AMSC_I2_API_KEY or JUDGE_OPENAI_API_KEY before running." >&2
-    exit 1
-  fi
+if [[ -n "${AMSC_I2_API_KEY:-}" ]]; then
   export JUDGE_OPENAI_API_KEY="$AMSC_I2_API_KEY"
+elif [[ -z "${JUDGE_OPENAI_API_KEY:-}" ]]; then
+  echo "ERROR: Set AMSC_I2_API_KEY or JUDGE_OPENAI_API_KEY before running." >&2
+  exit 1
 fi
+
+unset AZURE_OPENAI_ENDPOINT
+unset OPENAI_AZURE_ENDPOINT
+unset JUDGE_AZURE_OPENAI_ENDPOINT
+unset JUDGE_OPENAI_AZURE_ENDPOINT
+unset OPENAI_USE_AZURE
 
 export JUDGE_OPENAI_BASE_URL
 export JUDGE_OPENAI_USE_AZURE=false
